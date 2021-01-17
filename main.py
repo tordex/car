@@ -37,7 +37,7 @@ if __name__ == '__main__':
                 continue
 
             elif event.code == evdev.ecodes.BTN_B:
-                process_key("B", event)
+                my_car.on_break(event.value == 1)
                 continue
 
             elif event.code == evdev.ecodes.BTN_C:
@@ -88,11 +88,11 @@ if __name__ == '__main__':
                 continue
 
             elif event.code == evdev.ecodes.ABS_Z:
-                process_abs("LT", event.value, find_caps(event.type, event.code))
+                my_car.on_reverse(event.value, caps.min, caps.max)
                 continue
 
             elif event.code == evdev.ecodes.ABS_RZ:
-                process_abs("RT", event.value, find_caps(event.type, event.code))
+                my_car.on_forward(event.value, caps.min, caps.max)
                 continue
 
             elif event.code == evdev.ecodes.ABS_RX:
