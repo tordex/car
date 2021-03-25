@@ -12,6 +12,9 @@ MAX_ANGLE = -45
 MIN_ANGLE = 45
 """ Minimum angle for steering wheel """
 
+MIN_CAMERA_ANGLE = 40
+MAX_CAMERA_ANGLE = 150
+
 
 def map_range(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
@@ -111,13 +114,15 @@ class Car:
     """
 
     def __init__(self):
-        self.pwm = PWM(6)
+        self.pwm = PWM(10)
         self.pwm.start()
+        self.light_level = 0
         # self.pwm.set_pwm_freq(60)
         self.steering_wheel_left = ServoMotor(self.pwm, 0)
         self.steering_wheel_right = ServoMotor(self.pwm, 1)
         self.left_motor = DCMotor(self.pwm, 2, 3)
         self.right_motor = DCMotor(self.pwm, 4, 5)
+        self.camera = ServoMotor(self.pwm, 6)
         self.steering = Steering(
             mount_height=46.1,
             mount_width=40.0,
@@ -127,6 +132,18 @@ class Car:
             width=123,
             length=193.650
         )
+
+    def on_camera_rotate(self, value, min_value, max_value):
+        """
+        Call on camera rotate
+
+        :param value: current position of camera
+        :param min_value: minimum value for camera position
+        :param max_value: maximum value for camera position
+        :return: None
+        """
+        angle = map_range(value, min_value, max_value, MIN_CAMERA_ANGLE, MAX_CAMERA_ANGLE)
+        self.camera.set_angle(angle)
 
     def on_steering_wheel(self, value, min_value, max_value):
         """
@@ -185,6 +202,30 @@ class Car:
         self.left_motor.brake(value)
         self.right_motor.brake(value)
 
+    def on_light(self, value, min_value, max_value):
+        """
+        Call on change lights (connected to hat)
+
+        :param value:
+        :param min_value:
+        :param max_value:
+        :return:
+        """
+        changed = False
+        if value == min_value:
+            if self.light_level < 5:
+                self.light_level += 1
+                changed = True
+        elif value == max_value:
+            if self.light_level > 0:
+                self.light_level -= 1
+                changed = True
+        if changed:
+            level = int(map_range(self.light_level, 0, 5, 0, 4095))
+            print("on:{}, off:{}".format(level, 4095 - level))
+            self.pwm.set_pwm(8, 0, level)
+            self.pwm.set_pwm(9, 0, level)
+
     def _init_wheels(self):
         # Move wheel to center
         self.steering_wheel_left.set_angle(90)
@@ -222,6 +263,6 @@ if __name__ == '__main__':
 
     while True:
         val = int(input("angle: "))
-        my_car.on_steering_wheel(val, -45, 45)
+        my_car.camera.set_angle(val)
 
 

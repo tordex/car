@@ -1,141 +1,73 @@
-import evdev
 import car
 import time
-import os
+import gamepad
+from gpiozero import LED, Button
+import pydbus
 
 my_car = car.Car()
+pad_led = LED(17)
+pad_button = Button(pin=23)
 
 
-def process_key(name, ev):
-    if ev.value == 1:
-        print("**** {name}\tdown".format(name=name))
-    else:
-        print("**** {name}\tup".format(name=name))
+def connect_gamepad():
+    gamepad_dev = "5C:BA:37:86:31:97"
+    adapter_path = '/org/bluez/hci0'
+    device_path = f'{adapter_path}/dev_{gamepad_dev.replace(":", "_")}'
+    bluez_service = 'org.bluez'
+    bus = pydbus.SystemBus()
 
-
-def process_abs(name, value, absinfo):
-    percent = 100 * float(value - absinfo.min) / float(absinfo.max - absinfo.min)
-    # print("#### {name}\t{percent}".format(name=name, percent=percent))
+    print("Starting bluetooth connection...")
+    pad_led.blink(on_time=0.5, off_time=0.5, n=None, background=True)
+    for i in range(0, 5):
+        try:
+            print("Try #{}".format(i))
+            adapter = bus.get(bluez_service, adapter_path)
+            device = bus.get(bluez_service, device_path)
+            device.Connect()
+            print("Bluetooth is connected")
+            return
+        except Exception as er:
+            print(str(er))
+            time.sleep(5)
+    print("Bluetooth connection error")
+    pad_led.blink(on_time=1, off_time=0.5, n=3)
 
 
 if __name__ == '__main__':
     connected = False
     xbox_time = 0
     menu_time = 0
+    pad = None
+    pad_button.when_pressed = connect_gamepad
     while True:
         try:
             time.sleep(2)
-            gamepad = evdev.InputDevice('/dev/input/event0')
-            print(gamepad)
+            pad = gamepad.GamePad()
 
+            pad.attach_axis(gamepad.AXIS_GAS, my_car.on_forward)
+            pad.attach_axis(gamepad.AXIS_BRAKE, my_car.on_reverse)
+            pad.attach_axis(gamepad.AXIS_X, my_car.on_steering_wheel)
+            pad.attach_axis(gamepad.AXIS_Z, my_car.on_camera_rotate)
+            pad.attach_axis(gamepad.AXIS_HAT0Y, my_car.on_light)
+            pad.attach_button(gamepad.BTN_B, my_car.on_brake)
+
+            pad.open()
+
+            print("Connected, starting GamePad loop")
+            pad_led.on()
             my_car.on_connected()
             connected = True
 
-            dev_caps = gamepad.capabilities()
-
-            def find_caps(ev_type, ev_code):
-                for data in dev_caps[ev_type]:
-                    if data[0] == ev_code:
-                        return data[1]
-                return None
-
-            for event in gamepad.read_loop():
-                if event.type == evdev.ecodes.EV_SYN:
-                    continue
-                elif event.type == evdev.ecodes.EV_KEY:
-                    if event.code == evdev.ecodes.BTN_A:
-                        process_key("A", event)
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_B:
-                        my_car.on_brake(event.value == 1)
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_C:
-                        process_key("X", event)
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_NORTH:
-                        process_key("Y", event)
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_WEST:
-                        process_key("LB", event)
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_Z:
-                        process_key("RB", event)
-                        continue
-
-                    elif event.code == evdev.ecodes.KEY_MENU:
-                        if event.value == 1:
-                            if time.time() - xbox_time < 0.5:
-                                os.system("sudo poweroff")
-                                xbox_time = 0
-                            else:
-                                xbox_time = time.time()
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_TL:
-                        process_key("TOOLS", event)
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_TR:
-                        if event.value == 1:
-                            if time.time() - menu_time < 0.5:
-                                os.system("sudo reboot")
-                                menu_time = 0
-                            else:
-                                menu_time = time.time()
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_TR2:
-                        process_key("RIGHT_STICK", event)
-                        continue
-
-                    elif event.code == evdev.ecodes.BTN_TL2:
-                        process_key("LEFT_STICK", event)
-                        continue
-
-                elif event.type == evdev.ecodes.EV_ABS:
-                    caps = find_caps(event.type, event.code)
-                    if event.code == evdev.ecodes.ABS_X:
-                        my_car.on_steering_wheel(event.value, caps.min, caps.max)
-                        # process_abs("X", event.value, caps)
-                        continue
-
-                    elif event.code == evdev.ecodes.ABS_Y:
-                        process_abs("Y", event.value, find_caps(event.type, event.code))
-                        continue
-
-                    elif event.code == evdev.ecodes.ABS_Z:
-                        my_car.on_reverse(event.value, caps.min, caps.max)
-                        continue
-
-                    elif event.code == evdev.ecodes.ABS_RZ:
-                        my_car.on_forward(event.value, caps.min, caps.max)
-                        continue
-
-                    elif event.code == evdev.ecodes.ABS_RX:
-                        process_abs("RX", event.value, find_caps(event.type, event.code))
-                        continue
-
-                    elif event.code == evdev.ecodes.ABS_RY:
-                        process_abs("RY", event.value, find_caps(event.type, event.code))
-                        continue
-
-                    elif event.code == evdev.ecodes.ABS_HAT0X:
-                        process_abs("HAT-X", event.value, find_caps(event.type, event.code))
-                        continue
-
-                    elif event.code == evdev.ecodes.ABS_HAT0Y:
-                        process_abs("HAT-Y", event.value, find_caps(event.type, event.code))
-                        continue
+            pad.loop()
         except KeyboardInterrupt:
             my_car.close()
             exit(0)
         except Exception as err:
             if connected:
+                pad_led.off()
                 my_car.on_disconnected()
+            if pad:
+                pad.close()
+                pad = None
             connected = False
             print("main exception: {}".format(str(err)))
