@@ -26,7 +26,12 @@ class PWM(threading.Thread):
                             values.append((i, self._channels[i]))
                             self._channels[i] = None
                 for channel, value in values:
-                    self.pwm.set_pwm(channel, value[0], value[1])
+                    for cnt in range(0, 5):
+                        try:
+                            self.pwm.set_pwm(channel, value[0], value[1])
+                            break
+                        except Exception as err:
+                            print("PWM Error: {}".format(str(err)))
 
     def stop(self):
         with self._condition:
