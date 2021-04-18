@@ -1,6 +1,7 @@
 import Adafruit_PCA9685
 from steering import Steering
 from pwm_manager import PWM
+from gpiozero import LED, Button
 
 SERVO_0 = 110
 """ Servo value for 0 degrees """
@@ -20,22 +21,6 @@ def map_range(x, in_min, in_max, out_min, out_max):
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-class RetryCount(object):
-
-    def __init__(self, count: int):
-        self.count = count
-
-    def __call__(self, f):
-        def wrapped_f(*args):
-            for i in range(0, self.count):
-                try:
-                    f(*args)
-                    break
-                except Exception as err:
-                    print("exception: {}".format(str(err)))
-        return wrapped_f
-
-
 class ServoMotor:
 
     def __init__(self, pwm: PWM, channel: int):
@@ -43,7 +28,6 @@ class ServoMotor:
         self._channel = channel
         self.last_angle = 0
 
-    @RetryCount(3)
     def set_angle(self, value):
         servo_value = int(map_range(value, 0, 180, SERVO_0, SERVO_180))
         if self.last_angle != servo_value:
@@ -65,7 +49,6 @@ class DCMotor:
         self._brake = False
         self._differential = 1
 
-    @RetryCount(3)
     def _update_speed(self):
         """
         Update speed of motor depending of class members.
@@ -114,7 +97,7 @@ class Car:
     """
 
     def __init__(self):
-        self.pwm = PWM(10)
+        self.pwm = PWM(16)
         self.pwm.start()
         self.light_level = 0
         # self.pwm.set_pwm_freq(60)
@@ -122,7 +105,7 @@ class Car:
         self.steering_wheel_right = ServoMotor(self.pwm, 1)
         self.left_motor = DCMotor(self.pwm, 2, 3)
         self.right_motor = DCMotor(self.pwm, 4, 5)
-        self.camera = ServoMotor(self.pwm, 6)
+        self.camera = ServoMotor(self.pwm, 12)
         self.steering = Steering(
             mount_height=46.1,
             mount_width=40.0,
@@ -132,6 +115,28 @@ class Car:
             width=123,
             length=193.650
         )
+        self._mode_button = Button(24)
+        self._mode_button.when_pressed = self._on_mode_button
+        self._mode_led_1 = LED(22)
+        self._mode_led_2 = LED(10)
+        self.mode = 1
+        self._update_mode()
+
+    def _update_mode(self):
+        if self.mode & 0x1:
+            self._mode_led_1.on()
+        else:
+            self._mode_led_1.off()
+        if self.mode & 0x2:
+            self._mode_led_2.on()
+        else:
+            self._mode_led_2.off()
+
+    def _on_mode_button(self):
+        self.mode += 1
+        if self.mode > 3:
+            self.mode = 0
+        self._update_mode()
 
     def on_camera_rotate(self, value, min_value, max_value):
         """
@@ -222,9 +227,8 @@ class Car:
                 changed = True
         if changed:
             level = int(map_range(self.light_level, 0, 5, 0, 4095))
-            print("on:{}, off:{}".format(level, 4095 - level))
-            self.pwm.set_pwm(8, 0, level)
-            self.pwm.set_pwm(9, 0, level)
+            self.pwm.set_pwm(13, 0, level)
+            self.pwm.set_pwm(14, 0, level)
 
     def _init_wheels(self):
         # Move wheel to center

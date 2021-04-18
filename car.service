@@ -1,0 +1,18 @@
+[Unit]
+Description=Car daemon
+After=network.target
+StopWhenUnneeded=true
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/pi/car/
+ExecStart=/usr/bin/python3 /home/pi/car/main.py
+KillSignal=SIGINT
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=car
+
+[Install]
+WantedBy=multi-user.target

@@ -7,9 +7,13 @@ import pydbus
 my_car = car.Car()
 pad_led = LED(17)
 pad_button = Button(pin=23)
+connected = False
 
 
 def connect_gamepad():
+    if connected:
+        print("connect_gamepad: gamepad is already connected")
+        return
     gamepad_dev = "5C:BA:37:86:31:97"
     adapter_path = '/org/bluez/hci0'
     device_path = f'{adapter_path}/dev_{gamepad_dev.replace(":", "_")}'
@@ -25,16 +29,16 @@ def connect_gamepad():
             device = bus.get(bluez_service, device_path)
             device.Connect()
             print("Bluetooth is connected")
+            pad_led.on()
             return
         except Exception as er:
             print(str(er))
             time.sleep(5)
     print("Bluetooth connection error")
-    pad_led.blink(on_time=1, off_time=0.5, n=3)
+    pad_led.blink(on_time=0.2, off_time=0.2, n=2)
 
 
 if __name__ == '__main__':
-    connected = False
     xbox_time = 0
     menu_time = 0
     pad = None
